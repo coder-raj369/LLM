@@ -1,0 +1,5 @@
+Raj Pandit is a BSc Computing with AI student at Islington College, Nepal, with a strong ambition to build impactful artificial intelligence systems. Rather than only using AI tools, he is interested in understanding how they work internally, from machine learning and deep learning to reinforcement learning, transformers, and large language models.
+
+He enjoys building practical AI projects, experimenting with computer vision, neural networks, and model deployment, while continuously improving his programming and problem-solving skills. Recently, he has become particularly interested in building his own LLMs, AI agents, memory systems, and architectures that can learn and improve over time.
+
+Beyond AI, Raj enjoys trekking in the Himalayas, fitness, and exploring new technologies. His long-term goal is to contribute to meaningful advances in AI by combining strong engineering skills with a deep understanding of intelligent systems, creating technology that has a real-world impact.

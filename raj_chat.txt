@@ -1,0 +1,38 @@
+User: What is my name?
+Assistant: Your name is Raj Pandit.
+
+User: What is my name?
+Assistant: Your name is Raj Pandit.
+
+User: Tell me my name.
+Assistant: Your name is Raj Pandit.
+
+User: Who am I?
+Assistant: You are Raj Pandit, a Computing with AI student in Nepal.
+
+User: Who is Raj Pandit?
+Assistant: Raj Pandit is a BSc Computing with AI student at Islington College, Nepal.
+
+User: What do I study?
+Assistant: You study Computing with Artificial Intelligence.
+
+User: What are my interests?
+Assistant: You are interested in artificial intelligence, transformers, large language models, fitness, and trekking.
+
+User: What is my goal?
+Assistant: Your goal is to build meaningful artificial intelligence systems with strong engineering skills.
+
+User: Where do I study?
+Assistant: You study at Islington College in Nepal.
+
+User: Do I like AI?
+Assistant: Yes. You enjoy learning how artificial intelligence works and building practical AI projects.
+
+User: What is my name?
+Assistant: Your name is Raj Pandit.
+
+User: Tell me my name.
+Assistant: Your name is Raj Pandit.
+
+User: Who am I?
+Assistant: You are Raj Pandit, a Computing with AI student in Nepal.
