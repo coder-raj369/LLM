@@ -1,73 +1,86 @@
+"""Small tokenizers used by the learning Transformer project."""
+
 from collections import Counter
 
 
-class SimpleBPETokenizer:
+class BPETokenizer:
+    """Character BPE: frequent neighbouring tokens are gradually merged."""
 
-    def __init__(self):
-        # 1. Base vocabulary: Maps basic characters to integers
-        self.vocab = {chr(i): i for i in range(256)}
-        self.inverse_vocab = {v: k for k, v in self.vocab.items()}
+    def __init__(self, token_to_id: dict[str, int], merges: list[tuple[str, str]]):
+        self.token_to_id = token_to_id
+        self.id_to_token = {token_id: token for token, token_id in token_to_id.items()}
+        self.merges = merges
 
-    def train(self, text, num_merges):
-        """Finds frequent patterns in your training data and creates new integer IDs."""
-        # Split text into character sequences
-        sequences = [list(word) + ["</w>"] for word in text.split()]
+    @classmethod
+    def train(cls, text: str, max_merges: int = 100):
+        if not text:
+            raise ValueError("Cannot train a tokenizer on an empty file.")
 
-        for _ in range(num_merges):
-            # Count pairs
-            pairs = Counter()
-            for seq in sequences:
-                for i in range(len(seq) - 1):
-                    pairs[(seq[i], seq[i + 1])] += 1
+        symbols = list(text)
+        token_to_id = {character: index for index, character in enumerate(sorted(set(symbols)))}
+        merges = []
 
-            if not pairs:
+        for _ in range(max_merges):
+            pair_counts = Counter(zip(symbols, symbols[1:]))
+            if not pair_counts:
                 break
 
-            # Find the most common pair (e.g., 't' and 'h')
-            best_pair = pairs.most_common(1)[0][0]
+            pair, count = pair_counts.most_common(1)[0]
+            merged_token = pair[0] + pair[1]
+            if count < 2 or merged_token in token_to_id:
+                break
 
-            # Assign a new unique integer ID to this pair
-            new_token = "".join(best_pair)
-            new_id = len(self.vocab)
-            self.vocab[new_token] = new_id
-            self.inverse_vocab[new_id] = new_token
+            token_to_id[merged_token] = len(token_to_id)
+            merges.append(pair)
 
-            # Update sequences with the merged pair
-            new_sequences = []
-            for seq in sequences:
-                new_seq = []
-                i = 0
-                while i < len(seq):
-                    if (
-                        i < len(seq) - 1
-                        and (seq[i], seq[i + 1]) == best_pair
-                    ):
-                        new_seq.append(new_token)
-                        i += 2
-                    else:
-                        new_seq.append(seq[i])
-                        i += 1
-                sequences = new_sequences
+            merged_symbols = []
+            index = 0
+            while index < len(symbols):
+                if index < len(symbols) - 1 and (symbols[index], symbols[index + 1]) == pair:
+                    merged_symbols.append(merged_token)
+                    index += 2
+                else:
+                    merged_symbols.append(symbols[index])
+                    index += 1
+            symbols = merged_symbols
 
-    def encode(self, text):
-        """Converts text into a list of integer IDs using your vocabulary."""
-        # Simple fallback lookup matching largest possible chunks
-        tokens = text.split()
-        encoded_ids = []
+        return cls(token_to_id, merges)
 
-        for token in tokens:
-            token_with_end = token + "</w>"
-            # Greedily match against vocab
-            if token_with_end in self.vocab:
-                encoded_ids.append(self.vocab[token_with_end])
-            else:
-                # Fallback to individual character IDs if the word is unknown
-                for char in token:
-                    encoded_ids.append(self.vocab.get(char, 0))
-        return encoded_ids
+    @property
+    def vocab_size(self) -> int:
+        return len(self.token_to_id)
 
-    def decode(self, ids):
-        """Converts integer IDs back into readable text."""
-        tokens = [self.inverse_vocab.get(i, "") for i in ids]
-        text = "".join(tokens).replace("</w>", " ")
-        return text.strip()
+    @property
+    def characters(self) -> set[str]:
+        """The original character alphabet, useful for checking chat prompts."""
+        return {token for token in self.token_to_id if len(token) == 1}
+
+    def encode(self, text: str) -> list[int]:
+        unknown = set(text) - self.characters
+        if unknown:
+            raise ValueError(f"Characters not in the tokenizer vocabulary: {sorted(unknown)}")
+
+        symbols = list(text)
+        for pair in self.merges:
+            merged_token = pair[0] + pair[1]
+            merged_symbols = []
+            index = 0
+            while index < len(symbols):
+                if index < len(symbols) - 1 and (symbols[index], symbols[index + 1]) == pair:
+                    merged_symbols.append(merged_token)
+                    index += 2
+                else:
+                    merged_symbols.append(symbols[index])
+                    index += 1
+            symbols = merged_symbols
+        return [self.token_to_id[symbol] for symbol in symbols]
+
+    def decode(self, ids: list[int]) -> str:
+        return "".join(self.id_to_token[token_id] for token_id in ids)
+
+    def state_dict(self) -> dict:
+        return {"kind": "bpe", "token_to_id": self.token_to_id, "merges": self.merges}
+
+    @classmethod
+    def from_state_dict(cls, state: dict):
+        return cls(state["token_to_id"], [tuple(pair) for pair in state["merges"]])
