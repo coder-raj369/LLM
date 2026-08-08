@@ -1,4 +1,4 @@
-"""A small decoder-only Transformer that learns text one character at a time.
+"""A small GPT-style decoder-only Transformer trained from local text.
 
 The aim of this file is to show the important parts clearly.  It does not use a
 tokenizer package, an API, or a pre-trained model.  PyTorch is the only
@@ -134,8 +134,8 @@ class CharacterTransformer(nn.Module):
     ):
         super().__init__()
         self.block_size = block_size
-        self.character_embedding = nn.Embedding(vocab_size, embed_size)
-        # Learned positional embeddings let the model distinguish character order.
+        self.token_embedding = nn.Embedding(vocab_size, embed_size)
+        # Learned positional embeddings let the model distinguish token order.
         self.position_embedding = nn.Embedding(block_size, embed_size)
         self.blocks = nn.Sequential(
             *[TransformerBlock(embed_size, heads, block_size, dropout) for _ in range(layers)]
@@ -146,10 +146,10 @@ class CharacterTransformer(nn.Module):
     def forward(self, tokens: torch.Tensor, targets: torch.Tensor | None = None):
         _, time_steps = tokens.shape
         if time_steps > self.block_size:
-            raise ValueError(f"sequence has {time_steps} characters; max is {self.block_size}")
+            raise ValueError(f"sequence has {time_steps} tokens; max is {self.block_size}")
 
         positions = torch.arange(time_steps, device=tokens.device)
-        x = self.character_embedding(tokens) + self.position_embedding(positions)
+        x = self.token_embedding(tokens) + self.position_embedding(positions)
         x = self.blocks(x)
         logits = self.language_model_head(self.final_norm(x))
 
@@ -166,7 +166,7 @@ class CharacterTransformer(nn.Module):
         temperature: float = 0.8,
         top_k: int = 0,
     ) -> torch.Tensor:
-        """Adds sampled characters to the end of a prompt."""
+        """Adds sampled tokens to the end of a prompt."""
         self.eval()
         for _ in range(new_tokens):
             context = tokens[:, -self.block_size:]
@@ -190,12 +190,12 @@ def make_batch(data: torch.Tensor, batch_size: int, block_size: int, device: tor
 
 
 @torch.no_grad()
-def estimate_loss(model, train_data, validation_data, batch_size, block_size, device):
+def estimate_loss(model, train_data, validation_data, batch_size, block_size, device, batches=20):
     model.eval()
     losses = {}
     for name, data in {"train": train_data, "validation": validation_data}.items():
         values = []
-        for _ in range(20):
+        for _ in range(batches):
             inputs, targets = make_batch(data, batch_size, block_size, device)
             _, loss = model(inputs, targets)
             values.append(loss.item())
@@ -208,9 +208,18 @@ def main():
     parser = argparse.ArgumentParser(description="Train a small Transformer from plain text.")
     parser.add_argument("--input", help="Plain-text training file (needed when training)")
     parser.add_argument("--steps", type=int, default=1500, help="Number of training updates")
+    parser.add_argument("--preset", choices=("learning", "small-gpt"), default="learning")
     parser.add_argument("--tokenizer", choices=("character", "bpe"), default="bpe")
-    parser.add_argument("--bpe-merges", type=int, default=40, help="How many BPE merges to learn")
-    parser.add_argument("--context", type=int, default=128, help="Maximum number of input tokens")
+    parser.add_argument("--bpe-merges", type=int, help="How many BPE merges to learn")
+    parser.add_argument("--context", type=int, help="Maximum number of input tokens")
+    parser.add_argument("--embed-size", type=int, help="Size of each token embedding")
+    parser.add_argument("--heads", type=int, help="Number of attention heads")
+    parser.add_argument("--layers", type=int, help="Number of Transformer blocks")
+    parser.add_argument("--dropout", type=float, help="Dropout probability")
+    parser.add_argument("--batch-size", type=int, help="Sequences in each training batch")
+    parser.add_argument("--learning-rate", type=float, help="AdamW learning rate")
+    parser.add_argument("--eval-interval", type=int, default=250, help="Steps between validation checks")
+    parser.add_argument("--eval-batches", type=int, default=20, help="Batches used for each validation estimate")
     parser.add_argument("--sample-length", type=int, default=300, help="Tokens to generate")
     parser.add_argument("--prompt", default="", help="Optional starting text made of training characters")
     parser.add_argument("--temperature", type=float, default=0.7, help="Lower is safer; higher is more varied")
@@ -222,6 +231,39 @@ def main():
 
     if args.steps < 0:
         parser.error("--steps cannot be negative")
+    if args.eval_interval <= 0 or args.eval_batches <= 0:
+        parser.error("--eval-interval and --eval-batches must be positive")
+
+    presets = {
+        "learning": {
+            "bpe_merges": 40,
+            "context": 128,
+            "embed_size": 128,
+            "heads": 4,
+            "layers": 3,
+            "dropout": 0.1,
+            "batch_size": 32,
+            "learning_rate": 3e-4,
+        },
+        "small-gpt": {
+            "bpe_merges": 300,
+            "context": 256,
+            "embed_size": 192,
+            "heads": 6,
+            "layers": 4,
+            "dropout": 0.1,
+            "batch_size": 24,
+            "learning_rate": 3e-4,
+        },
+    }
+    settings = presets[args.preset].copy()
+    for name in settings:
+        override = getattr(args, name)
+        if override is not None:
+            settings[name] = override
+    if settings["embed_size"] % settings["heads"] != 0:
+        parser.error("--embed-size must be divisible by --heads")
+
     random.seed(42)
     torch.manual_seed(42)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -241,19 +283,19 @@ def main():
         if not args.input:
             parser.error("--input is required unless --load is used")
         text = Path(args.input).read_text(encoding="utf-8")
-        tokenizer = CharacterTokenizer(text) if args.tokenizer == "character" else BPETokenizer.train(text, args.bpe_merges)
+        tokenizer = CharacterTokenizer(text) if args.tokenizer == "character" else BPETokenizer.train(text, settings["bpe_merges"])
         model_config = {
             "vocab_size": tokenizer.vocab_size,
-            "block_size": args.context,
-            "embed_size": 128,
-            "heads": 4,
-            "layers": 3,
-            "dropout": 0.1,
+            "block_size": settings["context"],
+            "embed_size": settings["embed_size"],
+            "heads": settings["heads"],
+            "layers": settings["layers"],
+            "dropout": settings["dropout"],
         }
         checkpoint = None
 
     model = CharacterTransformer(**model_config).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=settings["learning_rate"])
     if checkpoint:
         model.load_state_dict(checkpoint["model_state"])
         if "optimizer_state" in checkpoint and args.steps > 0:
@@ -274,18 +316,26 @@ def main():
         split = len(encoded_text) - validation_size
         train_data, validation_data = encoded_text[:split], encoded_text[split:]
 
-        print(f"Training on {len(encoded_text):,} tokens with a vocabulary of {tokenizer.vocab_size} tokens.")
-        print(f"Context window: {block_size} tokens. Device: {device}. Parameters: {sum(p.numel() for p in model.parameters()):,}")
+        print(f"Preset: {args.preset}. Training on {len(encoded_text):,} tokens with a vocabulary of {tokenizer.vocab_size} tokens.")
+        print(f"Context: {block_size}. Batch size: {settings['batch_size']}. Device: {device}. Parameters: {sum(p.numel() for p in model.parameters()):,}")
         for step in range(args.steps):
-            inputs, targets = make_batch(train_data, batch_size=32, block_size=block_size, device=device)
+            inputs, targets = make_batch(train_data, batch_size=settings["batch_size"], block_size=block_size, device=device)
             _, loss = model(inputs, targets)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
-            if step % 250 == 0 or step == args.steps - 1:
-                losses = estimate_loss(model, train_data, validation_data, 32, block_size, device)
+            if step % args.eval_interval == 0 or step == args.steps - 1:
+                losses = estimate_loss(
+                    model,
+                    train_data,
+                    validation_data,
+                    settings["batch_size"],
+                    block_size,
+                    device,
+                    args.eval_batches,
+                )
                 print(f"step {step:4d} | train loss {losses['train']:.3f} | validation loss {losses['validation']:.3f}")
 
     if args.save:
