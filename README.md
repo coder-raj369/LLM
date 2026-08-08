@@ -35,13 +35,21 @@ LLM/
 
 ## Requirements
 
-- Python 3.10 or later
-- PyTorch
+- Python 3.10 or later (includes `argparse`, `math`, `pathlib`, and other
+  standard-library modules used by the project)
+- PyTorch 2.x
 
 Install the dependency:
 
 ```bash
 python3 -m pip install -r requirements.txt
+```
+
+Check the installed versions if needed:
+
+```bash
+python3 --version
+python3 -c "import torch; print(torch.__version__)"
 ```
 
 ## Train on a text file
