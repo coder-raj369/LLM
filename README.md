@@ -132,6 +132,50 @@ To compare raw character tokenization with BPE:
 python3 char_transformer.py --input my_text.txt --tokenizer character --steps 2000
 ```
 
+## Stage 3: train a small GPT-style model
+
+The `small-gpt` preset increases the context window, embedding size, attention
+heads, and number of Transformer blocks. It is intended for a larger local
+dataset, not the short example files in this repository.
+
+```bash
+python3 char_transformer.py \
+  --preset small-gpt \
+  --input data/large_text.txt \
+  --steps 10000 \
+  --save small_gpt.pt
+```
+
+The goal is to understand the training process, not to make a smart assistant.
+Use a plain UTF-8 text file of at least a few MB. The model learns one task:
+predicting the next token from the earlier tokens in its context window.
+
+The preset is deliberately modest so it is still practical to experiment with:
+
+| Setting | Learning preset | `small-gpt` preset |
+| --- | ---: | ---: |
+| BPE merges | 40 | 300 |
+| Context window | 128 tokens | 256 tokens |
+| Embedding size | 128 | 192 |
+| Attention heads | 4 | 6 |
+| Transformer blocks | 3 | 4 |
+
+Every setting can be changed from the command line. For example, use a longer
+context window and less frequent evaluation:
+
+```bash
+python3 char_transformer.py \
+  --preset small-gpt \
+  --input data/large_text.txt \
+  --context 512 \
+  --steps 20000 \
+  --eval-interval 500 \
+  --save small_gpt_context512.pt
+```
+
+If the machine runs out of memory, reduce `--context`, `--batch-size`, or
+`--embed-size` before reducing the dataset size.
+
 ## Verify the project
 
 Run the quick checks after making changes:
