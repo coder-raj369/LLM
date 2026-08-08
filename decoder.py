@@ -89,7 +89,7 @@ class DecoderBlock(nn.Module):
 
 # Quick verification test
 if __name__ == "__main__":
-    # Mock inputs: batch size 2, sequence length 5, embedding size 256
+    # Mock inputs batch size 2, sequence length 5, embedding size 256
     sample_input = torch.randn(2, 5, 256)
     
     # Initialize decoder block
@@ -98,3 +98,4 @@ if __name__ == "__main__":
     
     print("Input Shape :", sample_input.shape)
     print("Output Shape:", output.shape)
+    
