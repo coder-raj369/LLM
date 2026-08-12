@@ -1,0 +1,22 @@
+{"messages": [{"role": "user", "content": "Explain self attention."}, {"role": "assistant", "content": "Self attention lets each token use earlier tokens as context."}]}
+{"messages": [{"role": "user", "content": "What does a tokenizer do."}, {"role": "assistant", "content": "A tokenizer changes text into token ids for the model."}]}
+{"messages": [{"role": "user", "content": "Explain a context window."}, {"role": "assistant", "content": "A context window is the earlier token sequence the model can use."}]}
+{"messages": [{"role": "user", "content": "What is a training loss."}, {"role": "assistant", "content": "Training loss measures how well the model predicts target tokens."}]}
+{"messages": [{"role": "user", "content": "Explain BPE."}, {"role": "assistant", "content": "BPE merges common token pairs into a larger token vocabulary."}]}
+{"messages": [{"role": "user", "content": "What does an attention head do."}, {"role": "assistant", "content": "An attention head learns one way to connect earlier tokens."}]}
+{"messages": [{"role": "user", "content": "How does fine tuning work."}, {"role": "assistant", "content": "Fine tuning makes small changes to a pretrained model for one task."}]}
+{"messages": [{"role": "user", "content": "What is a checkpoint."}, {"role": "assistant", "content": "A checkpoint saves model weights and tokenizer data for later use."}]}
+{"messages": [{"role": "user", "content": "Explain sampling."}, {"role": "assistant", "content": "Sampling chooses a next token from model probabilities."}]}
+{"messages": [{"role": "user", "content": "Why use validation data."}, {"role": "assistant", "content": "This data helps check whether training is generalizing."}]}
+{"messages": [{"role": "user", "content": "Explain embeddings."}, {"role": "assistant", "content": "Embeddings are learned vectors that represent token ids."}]}
+{"messages": [{"role": "user", "content": "What does a feed forward network do."}, {"role": "assistant", "content": "A feed forward network transforms each token representation."}]}
+{"messages": [{"role": "user", "content": "What is MPS."}, {"role": "assistant", "content": "MPS lets PyTorch use Apple GPU hardware on a Mac."}]}
+{"messages": [{"role": "user", "content": "Explain causal masking."}, {"role": "assistant", "content": "Causal masking stops a token from seeing future tokens."}]}
+{"messages": [{"role": "user", "content": "What does top k sampling do."}, {"role": "assistant", "content": "Top k sampling limits choices to likely next tokens."}]}
+{"messages": [{"role": "user", "content": "Explain a language model."}, {"role": "assistant", "content": "A language model predicts the next token in a sequence."}]}
+{"messages": [{"role": "user", "content": "Explain residual connections."}, {"role": "assistant", "content": "Residual connections add earlier representations to later layers."}]}
+{"messages": [{"role": "user", "content": "What does dropout do."}, {"role": "assistant", "content": "Dropout hides some values during training to reduce overfitting."}]}
+{"messages": [{"role": "user", "content": "Explain model parameters."}, {"role": "assistant", "content": "Model parameters are learned values changed during training."}]}
+{"messages": [{"role": "user", "content": "What is an optimizer."}, {"role": "assistant", "content": "An optimizer changes model parameters using gradients."}]}
+{"messages": [{"role": "user", "content": "Explain self attention."}, {"role": "assistant", "content": "Self attention uses earlier tokens to build useful context."}, {"role": "user", "content": "Why is that useful."}, {"role": "assistant", "content": "It helps the model connect words across a sequence."}]}
+{"messages": [{"role": "user", "content": "What is BPE."}, {"role": "assistant", "content": "BPE builds tokens by merging common pairs."}, {"role": "user", "content": "Why is that useful."}, {"role": "assistant", "content": "It can make common text use fewer tokens."}]}
