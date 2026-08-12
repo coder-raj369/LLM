@@ -17,7 +17,10 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+from device import get_device
 from tokenization import BPETokenizer
+
+IGNORE_INDEX = -100
 
 
 class CharacterTokenizer:
@@ -155,7 +158,20 @@ class CharacterTransformer(nn.Module):
 
         loss = None
         if targets is not None:
-            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
+            if targets.shape != tokens.shape:
+                raise ValueError("targets must have the same shape as tokens")
+            if not torch.any(targets != IGNORE_INDEX):
+                raise ValueError("targets contain no tokens to learn from")
+            invalid_targets = (targets != IGNORE_INDEX) & (
+                (targets < 0) | (targets >= logits.size(-1))
+            )
+            if torch.any(invalid_targets):
+                raise ValueError("targets must be valid token IDs or IGNORE_INDEX")
+            loss = F.cross_entropy(
+                logits.reshape(-1, logits.size(-1)),
+                targets.reshape(-1),
+                ignore_index=IGNORE_INDEX,
+            )
         return logits, loss
 
     @torch.no_grad()
@@ -266,10 +282,10 @@ def main():
 
     random.seed(42)
     torch.manual_seed(42)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device()
 
     if args.load:
-        checkpoint = torch.load(args.load, map_location=device, weights_only=True)
+        checkpoint = torch.load(args.load, map_location="cpu", weights_only=True)
         if "model_state" not in checkpoint or "tokenizer" not in checkpoint:
             raise ValueError("This is not a Stage 2 checkpoint. Train and save the model again to create one.")
         tokenizer_state = checkpoint["tokenizer"]
@@ -298,7 +314,7 @@ def main():
     optimizer = torch.optim.AdamW(model.parameters(), lr=settings["learning_rate"])
     if checkpoint:
         model.load_state_dict(checkpoint["model_state"])
-        if "optimizer_state" in checkpoint and args.steps > 0:
+        if checkpoint.get("optimizer_state") is not None and args.steps > 0:
             optimizer.load_state_dict(checkpoint["optimizer_state"])
         print(f"Loaded checkpoint from {args.load}.")
 
