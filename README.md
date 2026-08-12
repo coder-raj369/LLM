@@ -26,6 +26,12 @@ reliably reason about arbitrary questions.
 LLM/
 ├── char_transformer.py  # Training, evaluation, generation, and terminal chat
 ├── tokenization.py      # From-scratch BPE tokenizer
+├── device.py            # CUDA → MPS → CPU device selection
+├── assistant_data.py    # Stage 4 dialogue format and assistant-only labels
+├── prepare_assistant_checkpoint.py  # Adds reserved dialogue-token rows
+├── finetune_assistant.py # Fine-tunes a prepared checkpoint on dialogue JSONL
+├── assistant_chat.py     # Stage 4 terminal chat with context-window sliding
+├── mps_smoke_test.py    # CPU/MPS forward, backward, and optimizer-step check
 ├── decoder.py           # Standalone Transformer decoder-block experiment
 ├── raj_bio.txt          # Small sample biography for text generation
 ├── raj_chat.txt         # Sample question-and-answer training data
@@ -97,6 +103,9 @@ python3 char_transformer.py \
   this filter off.
 
 ## Train and use the terminal chat
+
+> This is the earlier Stage 2 learning demo. It is not instruction-tuned and
+> should not be treated as the Stage 4 assistant workflow below.
 
 For conversational responses, the model needs examples in the same format as
 the conversation. `raj_chat.txt` teaches a few facts using `User:` and
@@ -184,13 +193,112 @@ python3 char_transformer.py \
 If the machine runs out of memory, reduce `--context`, `--batch-size`, or
 `--embed-size` before reducing the dataset size.
 
+## Stage 4a: adapt the pretrained model to dialogue
+
+Stage 3 pretraining teaches next-token prediction on general text. Stage 4a
+keeps that checkpoint unchanged and creates a separate fine-tuned copy that
+learns a small, consistent dialogue format.
+
+### 1. Check MPS before a long run
+
+The trainer now selects CUDA first, then Apple MPS, then CPU. On an Apple
+Silicon Mac, verify that the real project model can complete a forward pass,
+backward pass, and optimizer step on MPS:
+
+```bash
+python3 mps_smoke_test.py --require-mps --checkpoint small_gpt.pt
+```
+
+### 2. Create a dialogue-ready checkpoint
+
+This preserves every existing Stage 3 vocabulary row and appends three reserved
+tokens: `<|user|>`, `<|assistant|>`, and `<|end|>`. It also creates fresh
+fine-tuning optimizer state later; the pretrained optimizer state is not reused
+because its vocabulary-shaped tensors are too small.
+
+```bash
+python3 prepare_assistant_checkpoint.py \
+  --base-checkpoint small_gpt.pt \
+  --output checkpoints/small_gpt_assistant_base.pt
+```
+
+Never use the Stage 3 checkpoint as the output path. Keeping it untouched makes
+it possible to compare pretraining and fine-tuning, or restart a failed run.
+
+### 3. Write dialogue data
+
+Use one JSON object per line. Each dialogue starts with a user turn, alternates
+between `user` and `assistant`, and ends with an assistant response. The
+included [assistant_examples.jsonl](data/assistant_examples.jsonl) shows both
+single-exchange and short two-exchange conversations.
+
+```json
+{"messages": [
+  {"role": "user", "content": "Explain self attention."},
+  {"role": "assistant", "content": "Self attention lets each token use earlier tokens as context."}
+]}
+```
+
+The trainer formats that example as:
+
+```text
+<|user|>Explain self attention.<|end|><|assistant|>Self attention lets each token use earlier tokens as context.<|end|>
+```
+
+Only assistant answer tokens and the assistant closing `<|end|>` receive loss.
+The model can attend to user tokens, but the training objective does not ask it
+to generate the user prompt or the assistant marker.
+
+The Stage 3 BPE tokenizer only recognizes characters seen during pretraining.
+The included sample deliberately uses its known character set. If the loader
+reports an unknown character, curate or normalize that dialogue text rather
+than silently dropping information.
+
+### 4. Fine-tune a separate checkpoint
+
+The defaults are deliberately conservative for an M2 MacBook Air with 8 GB of
+unified memory: batch size 4, three epochs, and learning rate `1e-5`.
+
+```bash
+python3 finetune_assistant.py \
+  --base-checkpoint checkpoints/small_gpt_assistant_base.pt \
+  --data data/assistant_examples.jsonl \
+  --output checkpoints/small_gpt_assistant_finetuned.pt \
+  --epochs 3 \
+  --batch-size 4 \
+  --learning-rate 1e-5
+```
+
+The data split is by whole dialogue, never through the middle of a conversation.
+Examples longer than the model context window fail loudly instead of having a
+response silently removed.
+
+### 5. Talk to the fine-tuned model
+
+```bash
+python3 assistant_chat.py \
+  --checkpoint checkpoints/small_gpt_assistant_finetuned.pt \
+  --temperature 0.5 \
+  --top-k 12 \
+  --top-p 0.9
+```
+
+The chat runner inserts the role tokens itself, keeps the newest complete
+user/assistant exchanges that fit in the context window, and stops a response
+when the model samples `<|end|>`. It rejects unknown input characters clearly
+instead of silently changing the user message. Long-term memory, retrieval, and
+tools are intentionally separate later Stage 4 steps.
+
 ## Verify the project
 
 Run the quick checks after making changes:
 
 ```bash
 python3 test_tiny.py
+python3 test_stage4.py
 ```
 
 The test verifies model output shapes, finite loss, generation length, and BPE
-encode/decode round-tripping.
+encode/decode round-tripping. The Stage 4 test verifies special-token handling,
+checkpoint vocabulary expansion, preserved pretrained rows, and assistant-only
+loss labels.
